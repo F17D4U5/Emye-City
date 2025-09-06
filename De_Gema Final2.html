@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Kota 2D Sederhana</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS umum untuk layout dan styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background-color: #f3f4f6;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .scroll-container {
+            width: 100%;
+            max-width: 800px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        canvas {
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            touch-action: none;
+            width: 100%;
+            height: auto;
+            max-width: 800px;
+        }
+        .mode-active {
+            box-shadow: 0 0 0 4px #60a5fa;
+            transform: scale(1.05);
+        }
+        .control-button {
+            background-color: rgba(209, 213, 219, 0.7);
+            color: #4b5563;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s ease-in-out;
+            backdrop-filter: blur(2px);
+            width: 50px;
+            height: 50px;
+        }
+        .control-button:active {
+            transform: scale(0.95);
+        }
+        .action-button {
+            width: 100%;
+            padding: 0.5rem 1rem;
+            color: white;
+            font-weight: bold;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition-property: background-color, transform, box-shadow;
+            transition-duration: 0.15s;
+            transition-timing-function: ease-in-out;
+        }
+        .modal {
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s, opacity 0.3s linear;
+        }
+        .modal-show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            max-width: 90%;
+            width: 500px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .modal-close {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #9ca3af;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+        .modal-close:hover {
+            color: #6b7280;
+        }
+        .guide-list li {
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+        .popup-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 1rem;
+            background-color: #fff;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            z-index: 50;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s, opacity 0.2s linear;
+        }
+        .popup-menu.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        #landscape-controls {
+            display: none;
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            width: 150px;
+            height: 150px;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 0.5rem;
+            z-index: 20;
+        }
+        @media (max-width: 768px) and (orientation: landscape) {
+            #landscape-controls {
+                display: grid;
+            }
+        }
+        #portrait-controls {
+            display: none;
+            flex-direction: row;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 1rem;
+            width: 100%;
+            z-index: 20;
+        }
+        @media (max-width: 768px) and (orientation: portrait) {
+            #portrait-controls {
+                display: flex;
+            }
+        }
+        /* Style untuk kotak pesan sementara */
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #333;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 101;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .message-box.show {
+            opacity: 1;
+            visibility: visible;
+        }
+    </style>
+</head>
+<body>
+
+<div class="scroll-container">
+    <div class="main-container flex flex-col items-center w-full max-w-full md:max-w-4xl">
+        <div class="text-center mb-4">
+            <h1 class="text-3xl font-bold mb-2">Simulasi Kota 2D Sederhana</h1>
+            <p class="text-gray-600">Gunakan tombol di bawah dan panah keyboard untuk berinteraksi.</p>
+        </div>
+
+        <div class="relative w-full flex justify-center">
+            <canvas id="gameCanvas" class="w-full h-auto max-w-full"></canvas>
+            
+            <div id="landscape-controls">
+                <div></div>
+                <button id="landscape-up-btn" class="control-button text-2xl">▲</button>
+                <div></div>
+                <button id="landscape-left-btn" class="control-button text-2xl">◀</button>
+                <div></div>
+                <button id="landscape-right-btn" class="control-button text-2xl">►</button>
+                <div></div>
+                <button id="landscape-down-btn" class="control-button text-2xl">▼</button>
+                <div></div>
+            </div>
+        </div>
+        
+        <div id="portrait-controls" class="flex flex-row justify-center gap-4 mt-4 w-full">
+            <button id="portrait-up-btn" class="control-button text-2xl">▲</button>
+            <button id="portrait-down-btn" class="control-button text-2xl">▼</button>
+            <button id="portrait-left-btn" class="control-button text-2xl">◀</button>
+            <button id="portrait-right-btn" class="control-button text-2xl">►</button>
+        </div>
+
+        <div class="w-full text-lg text-center font-bold my-4 p-2 bg-slate-200 rounded-lg shadow-inner flex flex-col md:flex-row justify-around">
+            <div>Uang: <span id="moneyDisplay"></span></div>
+            <div>Populasi: <span id="populationDisplay"></span></div>
+            <div>Pekerja Tersedia: <span id="availableWorkersDisplay"></span></div>
+            <div>Daya Tersedia: <span id="powerDisplay"></span></div>
+        </div>
+        
+        <div class="w-full p-2 bg-slate-200 rounded-lg shadow-inner mt-2">
+            <label for="taxRateSlider" class="block text-center font-bold">Tingkat Pajak: <span id="taxRateDisplay"></span>%</label>
+            <input type="range" id="taxRateSlider" min="0" max="50" value="5" class="w-full mt-1 accent-blue-500" />
+        </div>
+
+        <div class="mt-4 w-full flex flex-col items-center">
+            <div class="relative w-full flex justify-center">
+                <div id="popupMenu" class="popup-menu grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 w-full max-w-md">
+                    <button id="houseButton" class="action-button" style="background-color: #fde047;">Bangun Rumah</button>
+                    <button id="parkButton" class="action-button" style="background-color: #22c55e;">Bangun Taman</button>
+                    <button id="storeButton" class="action-button" style="background-color: #f59e0b;">Bangun Toko</button>
+                    <button id="industrialButton" class="action-button" style="background-color: #1f2937;">Bangun Industri</button>
+                    <button id="roadButton" class="action-button" style="background-color: #64748b;">Bangun Jalan</button>
+                    <button id="hospitalButton" class="action-button" style="background-color: #7b241c;">Bangun Rumah Sakit</button>
+                    <button id="windTurbineButton" class="action-button" style="background-color: #3b82f6;">Bangun Kincir Angin</button>
+                </div>
+            </div>
+            <div class="w-full grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 max-w-full">
+                <button id="moveModeButton" class="action-button bg-blue-500 hover:bg-blue-600 transition-colors">
+                    Mode Pindah
+                </button>
+                <button id="destroyModeButton" class="action-button bg-red-500 hover:bg-red-600 transition-colors">
+                    Hancurkan
+                </button>
+                <button id="buildMenuButton" class="action-button bg-gray-600 hover:bg-gray-700 transition-colors">
+                    Bangun
+                </button>
+                <button id="guideButton" class="action-button bg-gray-400 hover:bg-gray-500">Panduan</button>
+                <button id="restartButton" class="action-button bg-yellow-500 hover:bg-yellow-600">Mulai Ulang</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="guideModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Panduan Permainan</h2>
+            <button id="guideModalCloseButton" class="modal-close">&times;</button>
+        </div>
+        <p>Selamat datang! Ini adalah simulasi pembangunan kota sederhana. Berikut panduan dasar untuk memulai:</p>
+        <ul class="guide-list mt-4">
+            <li><strong>Pergerakan (Tombol Panah):</strong> Gunakan tombol panah pada keyboard, atau tombol di layar sentuh, untuk menggerakkan dan menjelajahi peta. Dalam mode ini, klik bangunan untuk melihat informasinya.</li>
+            <li><strong>Pintasan Keyboard:</strong>
+                <ul>
+                    <li>'M' untuk <strong>Mode Pindah</strong></li>
+                    <li>'H' untuk <strong>Bangun Rumah</strong></li>
+                    <li>'P' untuk <strong>Bangun Taman</strong></li>
+                    <li>'T' untuk <strong>Bangun Toko</strong></li>
+                    <li>'I' untuk <strong>Bangun Industri</strong></li>
+                    <li>'J' untuk <strong>Bangun Jalan</strong></li>
+                    <li>'O' untuk <strong>Bangun Rumah Sakit</strong></li>
+                    <li>'L' untuk <strong>Bangun Kincir Angin</strong></li>
+                    <li>'X' untuk <strong>Mode Hancurkan</strong></li>
+                    <li>'G' untuk menampilkan <strong>Panduan</strong> ini</li>
+                    <li>'R' untuk <strong>Mulai Ulang</strong> permainan</li>
+                </ul>
+            </li>
+            <li><strong>Membangun Bangunan:</strong> Pilih salah satu tombol bangunan lalu klik di kanvas untuk membangunnya. Pastikan Anda memiliki cukup uang!</li>
+            <li><strong>Mode Hancurkan:</strong> Pilih tombol Hancurkan, lalu klik di bangunan yang ingin Anda hancurkan. Anda akan mendapatkan setengah dari biaya bangunan kembali.</li>
+            <li><strong>Tingkat Pajak:</strong> Sesuaikan tingkat pajak dengan penggeser di bawah kanvas. Tingkat pajak yang lebih tinggi akan meningkatkan uang Anda, tetapi bisa membuat populasi turun.</li>
+            <li><strong>Uang dan Populasi:</strong> Perhatikan panel di atas kanvas untuk melihat uang dan populasi Anda saat ini. Bangun rumah untuk meningkatkan populasi, dan bangun toko atau industri untuk memberikan lapangan pekerjaan bagi populasi.</li>
+            <li><strong>Pekerja:</strong> Bangunan bisnis seperti Toko dan Industri hanya akan menghasilkan uang jika Anda memiliki cukup populasi untuk mengisi semua posisi pekerjaan yang tersedia dan mendapat pasokan listrik yang cukup. Rumah sakit akan selalu beroperasi dan menghasilkan uang, tetapi membutuhkan pekerja (minimal 1/4 dari kapasitas pasiennya) untuk efisiensi maksimal.</li>
+            <li><strong>Koneksi Jalan:</strong> Pastikan bangunan Anda terhubung ke jalan agar warga dan bisnis lebih bahagia dan menguntungkan. Koneksi ini juga penting untuk mendapatkan akses ke pasokan listrik dari Pembangkit Listrik (kecuali untuk rumah sakit).</li>
+            <li><strong>Kebutuhan Listrik:</strong> Bangunan seperti Toko dan Industri membutuhkan listrik untuk beroperasi. Anda harus membangun <strong>Pembangkit Listrik</strong> untuk memenuhi kebutuhan ini. Pendapatan dari pembangkit listrik berasal dari penjualan listrik ke bangunan lain. Rumah sakit tidak membutuhkan listrik untuk beroperasi.</li>
+            <li><strong>Mulai Ulang:</strong> Tombol ini akan mereset semua uang, populasi, dan bangunan ke awal permainan. Gunakan jika Anda ingin memulai dari nol.</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Modal baru untuk menampilkan informasi bangunan -->
+<div id="infoModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="infoModalTitle">Informasi Bangunan</h2>
+            <button id="infoModalCloseButton" class="modal-close">&times;</button>
+        </div>
+        <div id="infoModalContent">
+            <!-- Konten informasi akan disisipkan di sini oleh JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- Kotak pesan untuk pesan sementara -->
+<div id="messageBox" class="message-box"></div>
+
+<script>
+    // Variabel status permainan
+    let money = 1000.00;
+    let population = 0;
+    let buildings = [];
+    let mapOffset = { x: 0, y: 0 };
+    let speed = 1.0;
+    let activeMode = 'move';
+    let buildingType = null;
+    let taxRate = 5;
+    let isPopupMenuOpen = false;
+    let selectedBuilding = null; 
+    let totalPowerOutput = 0;
+    let totalPowerUsage = 0;
+
+    // Konstanta permainan
+    const gridSize = 40;
+    const incomeInterval = 1000;
+    const incomePerPersonPerSecond = 10;
+    const pricePerUnitPower = 0.5;
+    const influenceRadiusInBlocks = 7;
+    let lastIncomeTime = Date.now();
+    const keys = {};
+    const touchControls = { up: false, down: false, left: false, right: false };
+    
+    // Nilai pendapatan dasar per pekerja
+    const baseIncomePerWorker = {
+        store: 16.67,
+        industrial: 25.00
+    };
+
+    const buildingStats = {
+        house: { cost: 100, populationCapacity: 5, name: 'Rumah', color: '#fde047' },
+        park: { cost: 50, name: 'Taman', color: '#22c55e', maintenance: 10, influenceRadius: 5 },
+        store: { cost: 200, name: 'Toko', color: '#f59e0b', workersRequired: 3, powerRequired: 10 },
+        industrial: { cost: 300, name: 'Industri', color: '#1f2937', workersRequired: 8, powerRequired: 25 },
+        road: { cost: 20, name: 'Jalan', color: '#64748b', maintenance: 1.5 },
+        hospital: {
+            cost: 500,
+            name: 'Rumah Sakit',
+            color: '#7b241c',
+            maintenance: 30,
+            patientCapacity: 100,
+            treatmentCost: 10,
+            influenceRadius: 10,
+            workersRequired: 25,
+            powerRequired: 20
+        },
+        windTurbine: { cost: 400, name: 'Kincir Angin', color: '#3b82f6', maintenance: 10, powerOutput: 40 }
+    };
+    
+    // Elemen UI
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const moneyDisplay = document.getElementById('moneyDisplay');
+    const populationDisplay = document.getElementById('populationDisplay');
+    const availableWorkersDisplay = document.getElementById('availableWorkersDisplay');
+    const powerDisplay = document.getElementById('powerDisplay');
+    const taxRateDisplay = document.getElementById('taxRateDisplay');
+    const taxRateSlider = document.getElementById('taxRateSlider');
+    const infoModal = document.getElementById('infoModal');
+    const infoModalCloseButton = document.getElementById('infoModalCloseButton');
+    const infoModalContent = document.getElementById('infoModalContent');
+    const guideModal = document.getElementById('guideModal');
+    const guideModalCloseButton = document.getElementById('guideModalCloseButton');
+    const popupMenu = document.getElementById('popupMenu');
+    const buildMenuButton = document.getElementById('buildMenuButton');
+    const moveModeButton = document.getElementById('moveModeButton');
+    const destroyModeButton = document.getElementById('destroyModeButton');
+    const messageBox = document.getElementById('messageBox');
+
+    const buildingButtons = {
+        house: document.getElementById('houseButton'),
+        park: document.getElementById('parkButton'),
+        store: document.getElementById('storeButton'),
+        industrial: document.getElementById('industrialButton'),
+        road: document.getElementById('roadButton'),
+        hospital: document.getElementById('hospitalButton'),
+        windTurbine: document.getElementById('windTurbineButton'),
+    };
+    
+    const guideButton = document.getElementById('guideButton');
+    const restartButton = document.getElementById('restartButton');
+
+    const landscapeControls = {
+        up: document.getElementById('landscape-up-btn'),
+        down: document.getElementById('landscape-down-btn'),
+        left: document.getElementById('landscape-left-btn'),
+        right: document.getElementById('landscape-right-btn')
+    };
+
+    const portraitControls = {
+        up: document.getElementById('portrait-up-btn'),
+        down: document.getElementById('portrait-down-btn'),
+        left: document.getElementById('portrait-left-btn'),
+        right: document.getElementById('portrait-right-btn')
+    };
+    
+    // Fungsi untuk memformat uang ke IDR
+    function formatRupiah(amount) {
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    }
+
+    // Fungsi untuk menampilkan pesan sementara
+    function showMessage(text) {
+        messageBox.textContent = text;
+        messageBox.classList.add('show');
+        setTimeout(() => {
+            messageBox.classList.remove('show');
+        }, 3000);
+    }
+
+    // Fungsi untuk menemukan bangunan di petak tertentu
+    function findBuilding(tileX, tileY) {
+        return buildings.find(b =>
+            Math.floor(b.x / gridSize) === tileX && Math.floor(b.y / gridSize) === tileY
+        );
+    }
+    
+    // Fungsi untuk memeriksa koneksi ke jalan
+    function isConnectedToRoad(tileX, tileY) {
+        const adjacentTiles = [
+            { x: tileX, y: tileY - 1 },
+            { x: tileX, y: tileY + 1 },
+            { x: tileX - 1, y: tileY },
+            { x: tileX + 1, y: tileY }
+        ];
+        return !!adjacentTiles.find(tile => {
+            const building = findBuilding(tile.x, tile.y);
+            return building && building.type === 'road';
+        });
+    }
+
+    // Fungsi untuk menghitung kebutuhan dan bonus bangunan
+    function calculateNeeds() {
+        const influentialBuildings = buildings.filter(b => buildingStats[b.type].influenceRadius);
+
+        buildings.forEach(building => {
+            const tileX = Math.floor(building.x / gridSize);
+            const tileY = Math.floor(building.y / gridSize);
+            const isConnected = isConnectedToRoad(tileX, tileY);
+
+            if (building.type === 'house') {
+                let happinessBonus = 0;
+                
+                influentialBuildings.forEach(influencer => {
+                    const distanceX = Math.abs(building.x - influencer.x);
+                    const distanceY = Math.abs(building.y - influencer.y);
+                    const distanceInBlocks = Math.sqrt(Math.pow(distanceX, 2) + Math.pow(distanceY, 2)) / gridSize;
+                    const influenceRadius = buildingStats[influencer.type].influenceRadius;
+
+                    if (distanceInBlocks <= influenceRadius) {
+                        if (influencer.type === 'park') {
+                            happinessBonus += 15;
+                        } else if (influencer.type === 'hospital') {
+                            happinessBonus += 25; 
+                        }
+                    }
+                });
+
+                if (isConnected) happinessBonus += 30;
+                let taxPenalty = taxRate > 10 ? (taxRate - 10) * 2 : 0;
+                happinessBonus -= taxPenalty;
+                
+                building.needs.happiness = Math.max(0, Math.min(100, Math.floor(happinessBonus + 50)));
+            }
+        });
+    }
+
+    /**
+     * Memperbarui konten modal info dengan data terbaru dari bangunan yang dipilih.
+     */
+    function updateInfoModal() {
+        if (!selectedBuilding) return;
+
+        const building = selectedBuilding;
+        const stats = buildingStats[building.type];
+        let infoText = `
+            <h3 class="font-bold text-lg mb-1">${stats.name}</h3>
+            <p>Posisi: (${Math.floor(building.x/gridSize)}, ${Math.floor(building.y/gridSize)})</p>
+        `;
+
+        if (building.type === 'house') {
+            const taxPerHouse = (building.population * incomePerPersonPerSecond) * (taxRate / 100);
+            infoText += `<p>Populasi: ${building.population} orang</p>`;
+            infoText += `<p>Kapasitas Maks: ${stats.populationCapacity} orang</p>`;
+            infoText += `<p>Kebahagiaan Warga: ${building.needs.happiness}%</p>`;
+            infoText += `<p>Pajak Bangunan: ${formatRupiah(taxPerHouse)}/detik</p>`;
+        } else if (building.type === 'hospital') {
+            const taxGain = (building.currentPatients || 0) * stats.treatmentCost;
+            infoText += `<p>Kapasitas Pasien: ${stats.patientCapacity} orang</p>`;
+            infoText += `<p>Pasien Saat Ini: ${building.currentPatients} orang</p>`;
+            infoText += `<p>Pekerja Dibutuhkan: ${stats.workersRequired}</p>`;
+            infoText += `<p>Pekerja Ditugaskan: ${building.workersAssigned || 0}</p>`;
+            infoText += `<p>Pajak Pengobatan: ${formatRupiah(taxGain)}/detik</p>`;
+            infoText += `<p>Biaya Perawatan: ${formatRupiah(stats.maintenance)}/detik</p>`;
+        } else if (stats.workersRequired) {
+            const taxGain = (baseIncomePerWorker[building.type] * (building.workersAssigned || 0)) * (taxRate / 100);
+            infoText += `<p>Status Listrik: ${building.isPowered ? 'Tersedia' : 'Tidak Tersedia'}</p>`;
+            infoText += `<p>Pekerja Dibutuhkan: ${stats.workersRequired}</p>`;
+            infoText += `<p>Pekerja Ditugaskan: ${building.workersAssigned || 0}</p>`;
+            infoText += `<p>Pajak Bangunan: ${formatRupiah(taxGain)}/detik</p>`;
+            if (stats.maintenance) {
+                infoText += `<p>Biaya Perawatan: ${formatRupiah(stats.maintenance)}/detik</p>`;
+            }
+        } else if (building.type === 'windTurbine') {
+            const powerIncome = (building.powerSold || 0) * pricePerUnitPower;
+            infoText += `<p>Kapasitas Daya: ${stats.powerOutput}</p>`;
+            infoText += `<p>Pendapatan Jual Daya: ${formatRupiah(powerIncome)}/detik</p>`;
+            infoText += `<p>Biaya Perawatan: ${formatRupiah(stats.maintenance)}/detik</p>`;
+        } else if (stats.maintenance) {
+             infoText += `<p>Biaya Perawatan: ${formatRupiah(stats.maintenance)}/detik</p>`;
+        }
+
+        infoModalContent.innerHTML = infoText;
+    }
+    
+    /**
+     * Menampilkan modal info dan mengatur bangunan yang saat ini dipilih.
+     * @param {object} building - Objek bangunan yang akan ditampilkan.
+     */
+    function showInfoModal(building) {
+        selectedBuilding = building;
+        updateInfoModal(); // Pembaruan awal
+        infoModal.classList.add('modal-show');
+    }
+
+    /**
+     * Menyembunyikan modal info dan mereset bangunan yang dipilih.
+     */
+    function hideInfoModal() {
+        infoModal.classList.remove('modal-show');
+        selectedBuilding = null;
+    }
+    
+    function gameLoop() {
+        // Logika pergerakan peta
+        let moveX = 0, moveY = 0;
+        if (keys['arrowup'] || touchControls.up) moveY -= speed;
+        if (keys['arrowdown'] || touchControls.down) moveY += speed;
+        if (keys['arrowleft'] || touchControls.left) moveX -= speed;
+        if (keys['arrowright'] || touchControls.right) moveX += speed;
+
+        mapOffset.x += moveX;
+        mapOffset.y += moveY;
+
+        // Batasi pergerakan peta agar tetap di dalam batas dunia
+        const worldSize = 5000;
+        mapOffset.x = Math.max(0, Math.min(worldSize - canvas.width, mapOffset.x));
+        mapOffset.y = Math.max(0, Math.min(worldSize - canvas.height, mapOffset.y));
+
+        // Hitung total populasi
+        let totalPopulation = 0;
+        buildings.forEach(b => {
+            if (b.type === 'house') {
+                totalPopulation += b.population;
+            }
+        });
+        population = totalPopulation;
+        
+        // Tetapkan pekerja ke bangunan yang membutuhkannya
+        let workersAssigned = 0;
+        const businessBuildings = buildings.filter(b => buildingStats[b.type].workersRequired);
+        
+        // Reset pekerja yang ditugaskan untuk semua bangunan bisnis
+        businessBuildings.forEach(b => b.workersAssigned = 0);
+
+        let availableWorkers = population;
+        for (const b of businessBuildings) {
+            // Utamakan menugaskan pekerja ke rumah sakit karena mereka penting
+            if (b.type === 'hospital') {
+                 const workersNeeded = buildingStats[b.type].workersRequired;
+                 const workersToAssign = Math.min(workersNeeded, Math.max(0, availableWorkers));
+                 b.workersAssigned = workersToAssign;
+                 availableWorkers -= workersToAssign;
+                 workersAssigned += workersToAssign;
+            }
+        }
+        for (const b of businessBuildings) {
+            // Tetapkan pekerja ke bisnis lain
+            if (b.type !== 'hospital') {
+                 const workersNeeded = buildingStats[b.type].workersRequired;
+                 const workersToAssign = Math.min(workersNeeded, Math.max(0, availableWorkers));
+                 b.workersAssigned = workersToAssign;
+                 availableWorkers -= workersToAssign;
+                 workersAssigned += workersToAssign;
+            }
+        }
+
+        // Hitung total output dan penggunaan daya
+        totalPowerOutput = 0;
+        totalPowerUsage = 0;
+        buildings.filter(b => b.type === 'windTurbine').forEach(p => {
+            totalPowerOutput += buildingStats.windTurbine.powerOutput;
+        });
+
+        // Atur status isPowered untuk bangunan dan hitung total penggunaan
+        buildings.forEach(b => {
+            const stats = buildingStats[b.type];
+            // Rumah sakit tidak membutuhkan daya untuk beroperasi
+            if (stats.powerRequired && b.type !== 'hospital') {
+                const tileX = Math.floor(b.x / gridSize);
+                const tileY = Math.floor(b.y / gridSize);
+                if (isConnectedToRoad(tileX, tileY) && totalPowerOutput > totalPowerUsage) {
+                    b.isPowered = true;
+                    totalPowerUsage += stats.powerRequired;
+                } else {
+                    b.isPowered = false;
+                }
+            } else {
+                b.isPowered = true;
+            }
+        });
+        
+        powerDisplay.textContent = `${totalPowerUsage} / ${totalPowerOutput}`;
+        
+        // Hitung pendapatan dan pengeluaran per detik
+        if (Date.now() - lastIncomeTime > incomeInterval) {
+            let totalIncome = 0;
+            let totalExpenditure = 0;
+            
+            buildings.forEach(b => {
+                const stats = buildingStats[b.type];
+                
+                if (b.type === 'house') {
+                    totalIncome += b.population * incomePerPersonPerSecond * (taxRate / 100);
+                } else if (stats.workersRequired) {
+                    // Pendapatan rumah sakit tidak bergantung pada daya atau pekerja
+                    if (b.type === 'hospital') {
+                         totalIncome += (b.currentPatients || 0) * stats.treatmentCost;
+                    } else if (b.isPowered && b.workersAssigned > 0) {
+                        const taxGain = (baseIncomePerWorker[b.type] * b.workersAssigned) * (taxRate / 100);
+                        totalIncome += taxGain;
+                    }
+                }
+                
+                if (stats.maintenance && b.type !== 'windTurbine') {
+                    totalExpenditure += stats.maintenance;
+                } else if (b.type === 'windTurbine') {
+                    b.powerSold = b.isPowered ? totalPowerUsage : 0;
+                    totalIncome += b.powerSold * pricePerUnitPower;
+                    totalExpenditure += stats.maintenance;
+                }
+            });
+            money += totalIncome;
+            money -= totalExpenditure;
+            lastIncomeTime = Date.now();
+        }
+
+        moneyDisplay.textContent = formatRupiah(money);
+        populationDisplay.textContent = population;
+        availableWorkersDisplay.textContent = Math.max(0, population - workersAssigned);
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Gambar garis-garis petak
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        const screenGridSizeX = Math.ceil(canvas.width / gridSize) + 1;
+        const screenGridSizeY = Math.ceil(canvas.height / gridSize) + 1;
+        
+        // Gambar garis vertikal
+        for (let x = 0; x < screenGridSizeX; x++) {
+            const drawX = (x * gridSize) - (mapOffset.x % gridSize);
+            ctx.beginPath();
+            ctx.moveTo(drawX, 0);
+            ctx.lineTo(drawX, canvas.height);
+            ctx.stroke();
+        }
+        
+        // Gambar garis horizontal
+        for (let y = 0; y < screenGridSizeY; y++) {
+            const drawY = (y * gridSize) - (mapOffset.y % gridSize);
+            ctx.beginPath();
+            ctx.moveTo(0, drawY);
+            ctx.lineTo(0, drawY, canvas.width, drawY);
+            ctx.lineTo(canvas.width, drawY);
+            ctx.stroke();
+        }
+        
+        buildings.forEach(building => {
+            const drawX = building.x - mapOffset.x;
+            const drawY = building.y - mapOffset.y;
+            if (drawX + gridSize < 0 || drawX > canvas.width || drawY + gridSize < 0 || drawY > canvas.height) return;
+            
+            ctx.fillStyle = building.color;
+
+            if (building.type === 'house') {
+                drawHouse(drawX, drawY, gridSize, gridSize, building.color);
+            } else if (building.type === 'store') {
+                drawStore(drawX, drawY, gridSize, gridSize, building.color);
+            } else if (building.type === 'industrial') {
+                drawIndustrial(drawX, drawY, gridSize, gridSize, building.color);
+            } else if (building.type === 'park') {
+                drawPark(drawX, drawY, gridSize, gridSize, building.flowers);
+            } else if (building.type === 'hospital') {
+                drawHospital(drawX, drawY, gridSize, gridSize, building.color);
+            } else if (building.type === 'windTurbine') {
+                drawWindTurbine(drawX, drawY, gridSize, gridSize);
+            } else if (building.type === 'road') {
+                drawRoad(building.x, building.y, gridSize, gridSize, building.color);
+            } else {
+                ctx.fillRect(drawX, drawY, gridSize, gridSize);
+                ctx.strokeStyle = '#334155';
+                ctx.strokeRect(drawX, drawY, gridSize, gridSize);
+            }
+        });
+
+        // --- Perbarui modal informasi secara real-time ---
+        updateInfoModal();
+        // --- Akhir dari pembaruan modal ---
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    /**
+     * @param {number} x - Posisi X di kanvas.
+     * @param {number} y - Posisi Y di kanvas.
+     * @param {number} width - Lebar rumah.
+     * @param {number} height - Tinggi rumah.
+     * @param {string} color - Warna rumah.
+     */
+    function drawHouse(x, y, width, height, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x, y + height);
+        ctx.lineTo(x, y + height * 0.4);
+        ctx.lineTo(x + width * 0.5, y);
+        ctx.lineTo(x + width, y + height * 0.4);
+        ctx.lineTo(x + width, y + height);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#334155';
+        ctx.stroke();
+
+        ctx.fillStyle = '#6b7280';
+        ctx.fillRect(x + width * 0.7, y + height * 0.1, width * 0.1, height * 0.2);
+        
+        ctx.fillStyle = '#4a5568';
+        ctx.fillRect(x + width * 0.4, y + height * 0.6, width * 0.2, height * 0.4);
+        
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(x + width * 0.15, y + height * 0.5, width * 0.2, height * 0.2);
+        ctx.fillRect(x + width * 0.65, y + height * 0.5, width * 0.2, height * 0.2);
+    }
+    
+    /**
+     * @param {number} x - Posisi X di kanvas.
+     * @param {number} y - Posisi Y di kanvas.
+     * @param {number} width - Lebar toko.
+     * @param {number} height - Tinggi toko.
+     * @param {string} color - Warna toko.
+     */
+    function drawStore(x, y, width, height, color) {
+        // Gambar badan utama bangunan
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y + height * 0.2, width, height * 0.8);
+        ctx.strokeStyle = '#334155';
+        ctx.strokeRect(x, y + height * 0.2, width, height * 0.8);
+
+        // Gambar atap
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(x, y, width, height * 0.2);
+        
+        // Gambar cerobong asap/dekorasi atap
+        ctx.fillStyle = '#6b7280';
+        ctx.fillRect(x + width * 0.8, y, width * 0.1, height * 0.2);
+
+        // Tambahkan jendela
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(x + width * 0.2, y + height * 0.4, width * 0.2, height * 0.2);
+        ctx.fillRect(x + width * 0.6, y + height * 0.4, width * 0.2, height * 0.2);
+        
+        // Tambahkan pintu
+        ctx.fillStyle = '#4a5568';
+        ctx.fillRect(x + width * 0.45, y + height * 0.6, width * 0.1, height * 0.4);
+    }
+
+    /**
+     * Menggambar bangunan industri dengan atap miring tunggal dan cerobong asap,
+     * sesuai dengan gambar referensi pengguna.
+     * @param {number} x - Koordinat X sudut kiri atas bangunan.
+     * @param {number} y - Koordinat Y sudut kiri atas bangunan.
+     * @param {number} width - Total lebar bangunan.
+     * @param {number} height - Total tinggi bangunan.
+     * @param {string} color - Warna utama bangunan.
+     */
+    function drawIndustrial(x, y, width, height, color) {
+        // Gambar badan utama bangunan, yang merupakan persegi panjang
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y + height * 0.5, width, height * 0.5);
+
+        // Gambar atap miring tunggal
+        ctx.fillStyle = '#4b5563'; // Warna atap
+        ctx.beginPath();
+        ctx.moveTo(x, y + height * 0.5);
+        ctx.lineTo(x + width, y + height * 0.2);
+        ctx.lineTo(x + width, y + height * 0.5);
+        ctx.lineTo(x, y + height * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#374151'; // Garis luar atap
+        ctx.stroke();
+
+        // Gambar cerobong asap tinggi di sisi kiri atap
+        ctx.fillStyle = '#9ca3af'; // Warna cerobong asap
+        ctx.fillRect(x + width * 0.1, y + height * 0.15, width * 0.08, height * 0.35);
+
+        // Tambahkan jendela ke badan utama
+        ctx.fillStyle = '#d1d5db';
+        ctx.fillRect(x + width * 0.2, y + height * 0.65, width * 0.2, height * 0.15);
+        ctx.fillRect(x + width * 0.6, y + height * 0.65, width * 0.2, height * 0.15);
+    }
+    
+    /**
+     * Menggambar taman dengan bunga statis.
+     * @param {number} x - Posisi X di kanvas.
+     * @param {number} y - Posisi Y di kanvas.
+     * @param {number} width - Lebar taman.
+     * @param {number} height - Tinggi taman.
+     * @param {Array} flowers - Array data bunga untuk digambar.
+     */
+    function drawPark(x, y, width, height, flowers) {
+        // Gambar jalur hijau tipis di tanah
+        const grassHeight = 2;
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(x, y + height - grassHeight, width, grassHeight);
+        
+        // Gambar bunga berdasarkan data yang sudah dihitung sebelumnya
+        flowers.forEach(flower => {
+            // Gambar batang sebagai garis
+            ctx.strokeStyle = flower.stemColor;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + flower.x, y + flower.y);
+            ctx.lineTo(x + flower.x, y + flower.y - flower.height); 
+            ctx.stroke();
+
+            // Gambar kepala bunga
+            ctx.fillStyle = flower.headColor;
+            if (flower.type === 'circle') {
+                ctx.beginPath();
+                ctx.arc(x + flower.x, y + flower.y - flower.height, flower.headSize, 0, 2 * Math.PI);
+                ctx.fill();
+            } else if (flower.type === 'square') {
+                ctx.fillRect(x + flower.x - flower.headSize/2, y + flower.y - flower.height - flower.headSize/2, flower.headSize, flower.headSize);
+            }
+        });
+    }
+    
+    /**
+     * Menggambar bangunan rumah sakit berdasarkan gambar referensi pengguna,
+     * dengan warna yang diperbaiki dan sudut atas yang kecil dihilangkan.
+     * @param {number} x - Posisi X di kanvas.
+     * @param {number} y - Posisi Y di kanvas.
+     * @param {number} width - Lebar bangunan.
+     * @param {number} height - Tinggi bangunan.
+     * @param {string} color - Warna utama bangunan.
+     */
+    function drawHospital(x, y, width, height, color) {
+        // Atur warna utama untuk badan bangunan
+        ctx.fillStyle = color;
+
+        // Gambar badan persegi panjang utama bangunan
+        ctx.fillRect(x + width * 0.1, y + height * 0.2, width * 0.8, height * 0.8);
+        
+        // Gambar platform atap
+        ctx.fillRect(x + width * 0.1, y + height * 0.1, width * 0.8, height * 0.1);
+
+        // Gambar tanda putih di atas
+        ctx.fillStyle = '#ffffff';
+        const signWidth = width * 0.4;
+        const signHeight = height * 0.2;
+        const signX = x + (width - signWidth) / 2;
+        const signY = y;
+        ctx.fillRect(signX, signY, signWidth, signHeight);
+
+        // Gambar salib merah di tanda
+        ctx.fillStyle = '#a71c1c';
+        const crossSize = Math.min(signWidth, signHeight) * 0.7;
+        const crossX = signX + (signWidth - crossSize) / 2;
+        const crossY = signY + (signHeight - crossSize) / 2;
+        // Bagian vertikal salib
+        ctx.fillRect(crossX + crossSize * 0.4, crossY, crossSize * 0.2, crossSize);
+        // Bagian horizontal salib
+        ctx.fillRect(crossX, crossY + crossSize * 0.4, crossSize, crossSize * 0.2);
+
+        // Gambar pintu
+        ctx.fillStyle = '#ffffff';
+        const doorWidth = width * 0.2;
+        const doorHeight = height * 0.2;
+        const doorX = x + (width - doorWidth) / 2;
+        const doorY = y + height * 0.8;
+        ctx.fillRect(doorX, doorY, doorWidth, doorHeight);
+        
+        // Gambar jendela-jendela
+        const windowWidth = width * 0.2;
+        const windowHeight = height * 0.15;
+        ctx.fillRect(x + width * 0.15, y + height * 0.25, windowWidth, windowHeight);
+        ctx.fillRect(x + width * 0.65, y + height * 0.25, windowWidth, windowHeight);
+        ctx.fillRect(x + width * 0.15, y + height * 0.5, windowWidth, windowHeight);
+        ctx.fillRect(x + width * 0.65, y + height * 0.5, windowWidth, windowHeight);
+    }
+    
+    /**
+     * Menggambar kincir angin dengan bilah berputar.
+     * @param {number} x - Koordinat X sudut kiri atas bangunan.
+     * @param {number} y - Koordinat Y sudut kiri atas bangunan.
+     * @param {number} width - Total lebar bangunan.
+     * @param {number} height - Total tinggi bangunan.
+     */
+    function drawWindTurbine(x, y, width, height) {
+        // Dasar kincir angin
+        const baseX = x + width * 0.4;
+        const baseY = y + height * 0.8;
+        ctx.fillStyle = '#a0a0a0';
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(baseX + width * 0.2, baseY);
+        ctx.lineTo(baseX + width * 0.15, y + height * 0.6);
+        ctx.lineTo(baseX + width * 0.05, y + height * 0.6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Menara
+        const towerX = x + width * 0.45;
+        const towerY = y + height * 0.6;
+        const towerWidth = width * 0.1;
+        const towerHeight = height * 0.4;
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(towerX, towerY, towerWidth, towerHeight);
+
+        // Hub untuk bilah
+        const hubX = towerX + towerWidth / 2;
+        const hubY = towerY - height * 0.05;
+
+        // --- Bilah Beranimasi ---
+        ctx.save();
+        ctx.translate(hubX, hubY);
+        const rotationAngle = (Date.now() / 500) % (2 * Math.PI);
+        ctx.rotate(rotationAngle);
+        const bladeWidth = width * 0.07;
+        const bladeLength = width * 0.4;
+        ctx.fillStyle = '#6b7280';
+        ctx.fillRect(-bladeLength, -bladeWidth / 2, bladeLength * 2, bladeWidth);
+        ctx.fillRect(-bladeWidth / 2, -bladeLength, bladeWidth, bladeLength * 2);
+        ctx.restore();
+
+        // Gambar ulang hub di atas bilah
+        ctx.fillStyle = '#4b5563';
+        ctx.beginPath();
+        ctx.arc(hubX, hubY, width * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    /**
+     * Menggambar jalan dengan isyarat visual dinamis berdasarkan tetangganya.
+     * @param {number} x - Posisi X dunia jalan.
+     * @param {number} y - Posisi Y dunia jalan.
+     * @param {number} width - Lebar blok jalan.
+     * @param {number} height - Tinggi blok jalan.
+     * @param {string} color - Warna jalan.
+     */
+    function drawRoad(x, y, width, height, color) {
+        const drawX = x - mapOffset.x;
+        const drawY = y - mapOffset.y;
+        const tileX = Math.floor(x / gridSize);
+        const tileY = Math.floor(y / gridSize);
+        const stripeColor = '#f8fafc';
+
+        // Gambar blok jalan dasar
+        ctx.fillStyle = color;
+        ctx.fillRect(drawX, drawY, width, height);
+
+        // Periksa blok jalan tetangga
+        const hasTopNeighbor = findBuilding(tileX, tileY - 1)?.type === 'road';
+        const hasBottomNeighbor = findBuilding(tileX, tileY + 1)?.type === 'road';
+        const hasLeftNeighbor = findBuilding(tileX - 1, tileY)?.type === 'road';
+        const hasRightNeighbor = findBuilding(tileX + 1, tileY)?.type === 'road';
+        
+        // Hitung tetangga untuk menentukan apakah itu persimpangan
+        const neighborCount = [hasTopNeighbor, hasBottomNeighbor, hasLeftNeighbor, hasRightNeighbor].filter(Boolean).length;
+
+        // Jangan gambar garis pada persimpangan (3 atau 4 koneksi)
+        if (neighborCount >= 3) {
+            return;
+        }
+
+        // Helper untuk menggambar garis putus-putus
+        function drawDashedLine(x1, y1, x2, y2) {
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]); // Atur pola putus-putus
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = stripeColor;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset pola putus-putus
+        }
+
+        // --- Logika untuk menggambar berdasarkan koneksi (tidak termasuk persimpangan) ---
+        if (hasTopNeighbor && hasBottomNeighbor) {
+            // Jalan vertikal
+            drawDashedLine(drawX + width / 2, drawY, drawX + width / 2, drawY + height);
+        } else if (hasLeftNeighbor && hasRightNeighbor) {
+            // Jalan horizontal
+            drawDashedLine(drawX, drawY + height / 2, drawX + width, drawY + height / 2);
+        } else {
+            // Sudut atau jalan buntu
+            const centerX = drawX + width / 2;
+            const centerY = drawY + height / 2;
+            const lineLength = width / 2;
+
+            if (hasTopNeighbor && hasRightNeighbor) {
+                // Sudut kanan atas
+                drawDashedLine(centerX, drawY, centerX, centerY);
+                drawDashedLine(centerX, centerY, drawX + width, centerY);
+            } else if (hasRightNeighbor && hasBottomNeighbor) {
+                // Sudut kanan bawah
+                drawDashedLine(centerX, centerY, drawX + width, centerY);
+                drawDashedLine(centerX, centerY, centerX, drawY + height);
+            } else if (hasBottomNeighbor && hasLeftNeighbor) {
+                // Sudut kiri bawah
+                drawDashedLine(centerX, centerY, centerX, drawY + height);
+                drawDashedLine(drawX, centerY, centerX, centerY);
+            } else if (hasLeftNeighbor && hasTopNeighbor) {
+                // Sudut kiri atas
+                drawDashedLine(drawX, centerY, centerX, centerY);
+                drawDashedLine(centerX, drawY, centerX, centerY);
+            } else if (hasTopNeighbor) {
+                // Jalan buntu di atas
+                drawDashedLine(centerX, centerY, centerX, drawY);
+            } else if (hasBottomNeighbor) {
+                // Jalan buntu di bawah
+                drawDashedLine(centerX, centerY, centerX, drawY + height);
+            } else if (hasLeftNeighbor) {
+                // Jalan buntu di kiri
+                drawDashedLine(drawX, centerY, centerX, centerY);
+            } else if (hasRightNeighbor) {
+                // Jalan buntu di kanan
+                drawDashedLine(centerX, centerY, drawX + width, centerY);
+            }
+        }
+    }
+    
+    function togglePopupMenu() {
+        isPopupMenuOpen = !isPopupMenuOpen;
+        if (isPopupMenuOpen) {
+            popupMenu.classList.add('show');
+        } else {
+            popupMenu.classList.remove('show');
+        }
+    }
+
+    function setMode(newMode, newType) {
+        activeMode = newMode;
+        if (newType) {
+            buildingType = newType;
+        }
+        updateButtonStyles();
+        if (newMode === 'build') {
+            if (!isPopupMenuOpen) togglePopupMenu();
+        } else {
+            if (isPopupMenuOpen) togglePopupMenu();
+        }
+    }
+    
+    function updateButtonStyles() {
+        moveModeButton.classList.remove('mode-active');
+        destroyModeButton.classList.remove('mode-active');
+        
+        // Hapus kelas aktif dari semua tombol bangunan
+        for (const btn in buildingButtons) {
+            const buttonEl = buildingButtons[btn];
+            if (buttonEl) {
+                buttonEl.classList.remove('mode-active');
+            }
+        }
+        
+        // Terapkan kembali kelas aktif berdasarkan mode dan tipe saat ini
+        if (activeMode === 'move') {
+            moveModeButton.classList.add('mode-active');
+        } else if (activeMode === 'destroy') {
+            destroyModeButton.classList.add('mode-active');
+        } else if (activeMode === 'build' && buildingType) {
+            // Catatan: Kami tidak mengaktifkan tombol 'Bangun' utama, hanya tombol bangunan tertentu
+            if (buildingButtons[buildingType]) {
+                buildingButtons[buildingType].classList.add('mode-active');
+            }
+        }
+    }
+
+    function restartGame() {
+        money = 1000.00;
+        population = 0;
+        buildings = [];
+        mapOffset = { x: 0, y: 0 };
+        activeMode = 'move';
+        buildingType = null;
+        taxRate = 5;
+        taxRateDisplay.textContent = taxRate;
+        taxRateSlider.value = taxRate;
+        totalPowerOutput = 0;
+        totalPowerUsage = 0;
+        updateButtonStyles();
+        hideInfoModal(); // Reset modal info
+    }
+
+    function init() {
+        // Event listener untuk keyboard
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            keys[key] = true;
+            
+            // Periksa pintasan untuk mengubah mode
+            if (key === 'm') {
+                setMode('move', null);
+            } else if (key === 'x') {
+                setMode('destroy', null);
+            }
+            
+            // Periksa pintasan untuk membangun
+            if (key === 'h') setMode('build', 'house');
+            else if (key === 'p') setMode('build', 'park');
+            else if (key === 't') setMode('build', 'store');
+            else if (key === 'i') setMode('build', 'industrial');
+            else if (key === 'j') setMode('build', 'road');
+            else if (key === 'o') setMode('build', 'hospital');
+            else if (key === 'l') setMode('build', 'windTurbine');
+
+            // Periksa pintasan lain
+            else if (key === 'g') {
+                guideModal.classList.add('modal-show');
+            } else if (key === 'r') {
+                restartGame();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // Event listener untuk kontrol sentuh pada tombol
+        const allMobileButtons = [
+            landscapeControls.up, landscapeControls.down, landscapeControls.left, landscapeControls.right,
+            portraitControls.up, portraitControls.down, portraitControls.left, portraitControls.right
+        ];
+
+        allMobileButtons.forEach(btn => {
+            if (btn) {
+                btn.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    if (e.target.id.includes('up')) touchControls.up = true;
+                    if (e.target.id.includes('down')) touchControls.down = true;
+                    if (e.target.id.includes('left')) touchControls.left = true;
+                    if (e.target.id.includes('right')) touchControls.right = true;
+                    document.body.addEventListener('pointerup', resetTouchControls);
+                });
+            }
+        });
+        
+        function resetTouchControls() {
+            touchControls.up = false;
+            touchControls.down = false;
+            touchControls.left = false;
+            touchControls.right = false;
+            document.body.removeEventListener('pointerup', resetTouchControls);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            const tileX = Math.floor((mouseX + mapOffset.x) / gridSize);
+            const tileY = Math.floor((mouseY + mapOffset.y) / gridSize);
+            
+            // Logika baru: klik bangunan untuk info saat dalam mode pindah
+            if (activeMode === 'move') {
+                const clickedBuilding = findBuilding(tileX, tileY);
+                if (clickedBuilding) {
+                    showInfoModal(clickedBuilding);
+                } else {
+                    hideInfoModal();
+                }
+            } else if (activeMode === 'build' || activeMode === 'destroy') {
+                
+                // Logika membangun dan menghancurkan
+                if (activeMode === 'build') {
+                    const existingBuilding = findBuilding(tileX, tileY);
+                    const stats = buildingStats[buildingType];
+                    const cost = stats.cost;
+                    if (!existingBuilding && money >= cost) {
+                        const newBuilding = {
+                            id: Date.now(), 
+                            x: tileX * gridSize, 
+                            y: tileY * gridSize, 
+                            type: buildingType, 
+                            color: stats.color,
+                            population: stats.populationCapacity || 0,
+                            currentPatients: buildingType === 'hospital' ? 0 : null,
+                            needs: { happiness: 0 },
+                            workersAssigned: 0,
+                            isPowered: false
+                        };
+                        
+                        // Untuk taman, hitung posisi bunga statis
+                        if (buildingType === 'park') {
+                            newBuilding.flowers = [];
+                            const flowerTypes = [
+                                { stemColor: '#8B4513', headColor: '#FF6347', height: 10, headSize: 4, type: 'circle' },
+                                { stemColor: '#228B22', headColor: '#DA70D6', height: 14, headSize: 5, type: 'square' },
+                                { stemColor: '#6B8E23', headColor: '#ADD8E6', height: 12, headSize: 6, type: 'circle' },
+                                { stemColor: '#556B2F', headColor: '#FFA07A', height: 16, headSize: 3, type: 'square' }
+                            ];
+                            const numFlowers = Math.floor(gridSize / 10);
+                            for (let i = 0; i < numFlowers; i++) {
+                                const flower = flowerTypes[Math.floor(Math.random() * flowerTypes.length)];
+                                newBuilding.flowers.push({
+                                    x: Math.random() * (gridSize - 10) + 5,
+                                    y: gridSize,
+                                    stemColor: flower.stemColor,
+                                    headColor: flower.headColor,
+                                    height: flower.height,
+                                    headSize: flower.headSize,
+                                    type: flower.type
+                                });
+                            }
+                        }
+                        
+                        buildings.push(newBuilding);
+                        money -= cost;
+                        calculateNeeds();
+                    } else if (existingBuilding) {
+                        showMessage('Lokasi ini sudah terisi!');
+                    } else if (money < cost) {
+                        showMessage('Uang tidak cukup!');
+                    }
+                } else if (activeMode === 'destroy') {
+                    const buildingIndex = buildings.findIndex(b =>
+                        Math.floor(b.x / gridSize) === tileX && Math.floor(b.y / gridSize) === tileY
+                    );
+                    if (buildingIndex !== -1) {
+                        const destroyedBuilding = buildings.splice(buildingIndex, 1)[0];
+                        const refund = buildingStats[destroyedBuilding.type].cost * 0.5;
+                        money += refund;
+                        showMessage(`Bangunan dihancurkan! Uang dikembalikan: ${formatRupiah(refund)}.`);
+                        calculateNeeds();
+                    }
+                }
+            }
+        });
+
+        // Event listener untuk penggeser tingkat pajak
+        taxRateSlider.addEventListener('input', (e) => {
+            taxRate = parseInt(e.target.value);
+            taxRateDisplay.textContent = taxRate;
+            calculateNeeds();
+        });
+
+        // Event listener untuk tombol UI
+        buildMenuButton.addEventListener('click', togglePopupMenu);
+        moveModeButton.addEventListener('click', () => {
+            setMode('move', null);
+        });
+        destroyModeButton.addEventListener('click', () => {
+            setMode('destroy', null);
+        });
+        restartButton.addEventListener('click', restartGame);
+
+        // Tampilkan dan sembunyikan modal panduan
+        guideButton.addEventListener('click', () => { guideModal.classList.add('modal-show'); });
+        guideModalCloseButton.addEventListener('click', () => { guideModal.classList.remove('modal-show'); });
+        
+        // Sembunyikan modal info
+        infoModalCloseButton.addEventListener('click', hideInfoModal);
+        
+        window.addEventListener('click', (event) => {
+            if (event.target === guideModal) {
+                guideModal.classList.remove('modal-show');
+            }
+            if (event.target === infoModal) {
+                hideInfoModal();
+            }
+            if (isPopupMenuOpen && !popupMenu.contains(event.target) && !buildMenuButton.contains(event.target)) {
+                togglePopupMenu();
+            }
+        });
+        
+        for (const type in buildingButtons) {
+            buildingButtons[type].addEventListener('click', () => {
+                setMode('build', type);
+            });
+        }
+
+        const resizeCanvas = () => {
+            canvas.width = Math.min(800, window.innerWidth - 40);
+            canvas.height = canvas.width * 0.75;
+            gameLoop();
+        };
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        restartGame();
+
+        // Interval untuk pembaruan populasi dan pasien
+        setInterval(() => {
+            buildings.filter(b => b.type === 'house').forEach(house => {
+                let changeAmount = 0;
+                if (house.needs.happiness >= 80) {
+                    changeAmount = Math.floor(Math.random() * 2) + 1;
+                } else if (house.needs.happiness < 50) {
+                    changeAmount = -(Math.floor(Math.random() * 2) + 1);
+                }
+                
+                let newPopulation = house.population + changeAmount;
+                if (taxRate > 40 && newPopulation < 0) newPopulation = 0;
+                else if (newPopulation < 1) newPopulation = 1;
+                house.population = Math.min(buildingStats.house.populationCapacity, newPopulation);
+            });
+            let totalPopulation = 0;
+            buildings.forEach(b => {
+                if (b.type === 'house') totalPopulation += b.population;
+            });
+            population = totalPopulation;
+
+            // --- LOGIKA BARU UNTUK KESEIMBANGAN PASIEN DAN DINAMIKA SOSIAL ---
+            buildings.filter(b => b.type === 'hospital').forEach(hospital => {
+                const stats = buildingStats.hospital;
+                const currentPatients = hospital.currentPatients || 0;
+                
+                // Pasien datang: Logika baru bergantung pada populasi, mencerminkan tekanan pada fasilitas kesehatan
+                const incomingPatients = Math.max(1, Math.floor(population / 100));
+                
+                // Pasien sembuh: Logika baru bergantung pada jumlah pekerja yang ditugaskan di rumah sakit.
+                // Ini menciptakan insentif sosial untuk mengalokasikan tenaga kerja.
+                const healingRate = hospital.workersAssigned > 0 ? (hospital.workersAssigned / stats.workersRequired) * 0.1 : 0.05;
+                const healedPatients = Math.max(1, Math.floor(currentPatients * healingRate));
+                
+                let newPatientCount = currentPatients + incomingPatients - healedPatients;
+                
+                // Pastikan jumlah pasien tidak melebihi kapasitas dan tidak kurang dari 0
+                newPatientCount = Math.max(0, Math.min(newPatientCount, stats.patientCapacity));
+                
+                hospital.currentPatients = newPatientCount;
+            });
+            // --- AKHIR DARI LOGIKA BARU PASIEN ---
+
+        }, 5000);
+        setInterval(calculateNeeds, 2000);
+
+        gameLoop();
+    }
+
+    // Gunakan DOMContentLoaded daripada window.onload untuk kompatibilitas yang lebih baik
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
