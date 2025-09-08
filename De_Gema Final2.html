@@ -1165,7 +1165,7 @@
             keys[e.key.toLowerCase()] = false;
         });
 
-        // Event listener untuk kontrol sentuh pada tombol
+        // --- PERBAIKAN: Gunakan pointerdown dan pointerup pada setiap tombol secara individual ---
         const allMobileButtons = [
             landscapeControls.up, landscapeControls.down, landscapeControls.left, landscapeControls.right,
             portraitControls.up, portraitControls.down, portraitControls.left, portraitControls.right
@@ -1174,23 +1174,33 @@
         allMobileButtons.forEach(btn => {
             if (btn) {
                 btn.addEventListener('pointerdown', (e) => {
+                    e.preventDefault(); // Mencegah perilaku default seperti scrolling
+                    const buttonId = e.currentTarget.id;
+                    if (buttonId.includes('up')) touchControls.up = true;
+                    if (buttonId.includes('down')) touchControls.down = true;
+                    if (buttonId.includes('left')) touchControls.left = true;
+                    if (buttonId.includes('right')) touchControls.right = true;
+                });
+                btn.addEventListener('pointerup', (e) => {
                     e.preventDefault();
-                    if (e.target.id.includes('up')) touchControls.up = true;
-                    if (e.target.id.includes('down')) touchControls.down = true;
-                    if (e.target.id.includes('left')) touchControls.left = true;
-                    if (e.target.id.includes('right')) touchControls.right = true;
-                    document.body.addEventListener('pointerup', resetTouchControls);
+                    const buttonId = e.currentTarget.id;
+                    if (buttonId.includes('up')) touchControls.up = false;
+                    if (buttonId.includes('down')) touchControls.down = false;
+                    if (buttonId.includes('left')) touchControls.left = false;
+                    if (buttonId.includes('right')) touchControls.right = false;
+                });
+                // Untuk memastikan tombol berhenti jika sentuhan bergerak keluar dari area tombol
+                btn.addEventListener('pointerleave', (e) => {
+                     e.preventDefault();
+                     const buttonId = e.currentTarget.id;
+                     if (buttonId.includes('up')) touchControls.up = false;
+                     if (buttonId.includes('down')) touchControls.down = false;
+                     if (buttonId.includes('left')) touchControls.left = false;
+                     if (buttonId.includes('right')) touchControls.right = false;
                 });
             }
         });
-        
-        function resetTouchControls() {
-            touchControls.up = false;
-            touchControls.down = false;
-            touchControls.left = false;
-            touchControls.right = false;
-            document.body.removeEventListener('pointerup', resetTouchControls);
-        }
+        // --- AKHIR DARI PERBAIKAN UNTUK TOMBOL MOBILE ---
 
         canvas.addEventListener('click', (e) => {
             const rect = canvas.getBoundingClientRect();
