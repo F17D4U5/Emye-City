@@ -1,4 +1,3 @@
-# De_gema2
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -261,6 +260,7 @@
                 </button>
                 <button id="guideButton" class="action-button bg-gray-400 hover:bg-gray-500">Panduan</button>
                 <button id="restartButton" class="action-button bg-yellow-500 hover:bg-yellow-600">Mulai Ulang</button>
+		<button id="reportButton" class="action-button bg-purple-500 hover:bg-purple-600 transition-colors">Laporan Kota</button>
             </div>
         </div>
     </div>
@@ -302,6 +302,18 @@
     </div>
 </div>
 
+<!-- Modal baru untuk menampilkan laporan kota-->
+<div id="reportModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Laporan Kota</h2>
+            <button id="reportModalCloseButton" class="modal-close">&times;</button>
+        </div>
+        <div id="reportModalContent" class="text-gray-800 space-y-4">
+            </div>
+    </div>
+</div>
+
 <!-- Modal baru untuk menampilkan informasi bangunan -->
 <div id="infoModal" class="modal">
     <div class="modal-content">
@@ -310,11 +322,9 @@
             <button id="infoModalCloseButton" class="modal-close">&times;</button>
         </div>
         <div id="infoModalContent">
-            <!-- Konten informasi akan disisipkan di sini oleh JavaScript -->
-        </div>
+            </div>
     </div>
 </div>
-
 <!-- Kotak pesan untuk pesan sementara -->
 <div id="messageBox" class="message-box"></div>
 
@@ -415,6 +425,11 @@
         left: document.getElementById('portrait-left-btn'),
         right: document.getElementById('portrait-right-btn')
     };
+	// Deklarasi UI untuk Laporan
+    const reportButton = document.getElementById('reportButton');
+    const reportModal = document.getElementById('reportModal');
+    const reportModalCloseButton = document.getElementById('reportModalCloseButton');
+    const reportModalContent = document.getElementById('reportModalContent');
     
     // Fungsi untuk memformat uang ke IDR
     function formatRupiah(amount) {
@@ -440,6 +455,130 @@
         return buildings.find(b =>
             Math.floor(b.x / gridSize) === tileX && Math.floor(b.y / gridSize) === tileY
         );
+    }
+    /**
+     * Menghasilkan laporan lengkap tentang status kota.
+     * @returns {object} - Objek yang berisi data laporan.
+     */
+    function generateCityReport() {
+        // Objek untuk mengumpulkan total pendapatan dan pengeluaran
+        const report = {
+            totalPopulation: 0,
+            averageHappiness: 0,
+            income: {
+                total: 0,
+                house: 0,
+                store: 0,
+                industrial: 0,
+                hospital: 0,
+                windTurbine: 0
+            },
+            expenditure: {
+                total: 0,
+                road: 0,
+                park: 0,
+                hospital: 0,
+                windTurbine: 0
+            },
+            power: {
+                generated: totalPowerOutput,
+                used: totalPowerUsage
+            }
+        };
+
+        let totalHappiness = 0;
+        let houseCount = 0;
+
+        buildings.forEach(b => {
+            const stats = buildingStats[b.type];
+
+            // Hitung pendapatan dan pengeluaran
+            if (b.type === 'house') {
+                report.totalPopulation += b.population;
+                totalHappiness += b.needs.happiness;
+                houseCount++;
+                const taxPerHouse = (b.population * incomePerPersonPerSecond) * (taxRate / 100);
+                report.income.house += taxPerHouse;
+                report.income.total += taxPerHouse;
+            } else if (stats.workersRequired) {
+                if (b.type === 'hospital') {
+                    const taxGain = (b.currentPatients || 0) * stats.treatmentCost;
+                    report.income.hospital += taxGain;
+                    report.income.total += taxGain;
+                } else if (b.isPowered && b.workersAssigned > 0) {
+                    const taxGain = (baseIncomePerWorker[b.type] * b.workersAssigned) * (taxRate / 100);
+                    report.income[b.type] += taxGain;
+                    report.income.total += taxGain;
+                }
+            }
+            
+            if (stats.maintenance) {
+                report.expenditure[b.type] += stats.maintenance;
+                report.expenditure.total += stats.maintenance;
+            }
+
+            if (b.type === 'windTurbine') {
+                const powerIncome = (b.powerSold || 0) * pricePerUnitPower;
+                report.income.windTurbine += powerIncome;
+                report.income.total += powerIncome;
+            }
+        });
+
+        // Hitung kebahagiaan rata-rata
+        report.averageHappiness = houseCount > 0 ? Math.floor(totalHappiness / houseCount) : 0;
+        
+        return report;
+    }
+    
+    /**
+     * Memperbarui dan menampilkan modal laporan kota.
+     */
+    function showReport() {
+        const reportData = generateCityReport();
+
+        let reportHtml = `
+            <div class="p-4 border border-gray-300 rounded-lg bg-gray-100">
+                <h3 class="font-bold text-lg mb-2">Ringkasan Kota</h3>
+                <p>Populasi Total: <strong>${reportData.totalPopulation} orang</strong></p>
+                <p>Tingkat Kebahagiaan Rata-Rata: <strong>${reportData.averageHappiness}%</strong></p>
+            </div>
+            <div class="p-4 border border-green-300 rounded-lg bg-green-50">
+                <h3 class="font-bold text-lg mb-2 text-green-700">Pendapatan Tahunan</h3>
+                <p>Pendapatan Total: <strong>${formatRupiah(reportData.income.total * 365 * 24 * 60 * 60 / incomeInterval)}</strong></p>
+                <ul class="list-disc ml-6 mt-2">
+                    <li>Rumah: ${formatRupiah(reportData.income.house * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                    <li>Toko: ${formatRupiah(reportData.income.store * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                    <li>Industri: ${formatRupiah(reportData.income.industrial * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                    <li>Rumah Sakit: ${formatRupiah(reportData.income.hospital * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                    <li>Kincir Angin: ${formatRupiah(reportData.income.windTurbine * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                </ul>
+            </div>
+            <div class="p-4 border border-red-300 rounded-lg bg-red-50">
+                <h3 class="font-bold text-lg mb-2 text-red-700">Pengeluaran Tahunan</h3>
+                <p>Pengeluaran Total: <strong>${formatRupiah(reportData.expenditure.total * 365 * 24 * 60 * 60 / incomeInterval)}</strong></p>
+                <ul class="list-disc ml-6 mt-2">
+                    <li>Jalan: ${formatRupiah(reportData.expenditure.road * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                    <li>Taman: ${formatRupiah(reportData.expenditure.park * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                    <li>Rumah Sakit: ${formatRupiah(reportData.expenditure.hospital * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                    <li>Kincir Angin: ${formatRupiah(reportData.expenditure.windTurbine * 365 * 24 * 60 * 60 / incomeInterval)}</li>
+                </ul>
+            </div>
+            <div class="p-4 border border-blue-300 rounded-lg bg-blue-50">
+                <h3 class="font-bold text-lg mb-2 text-blue-700">Statistik Listrik</h3>
+                <p>Daya yang Dihasilkan: <strong>${reportData.power.generated} kWh</strong></p>
+                <p>Daya yang Digunakan: <strong>${reportData.power.used} kWh</strong></p>
+            </div>
+        `;
+
+        reportModalContent.innerHTML = reportHtml;
+        reportModal.classList.add('modal-show');
+    }
+    
+    /**
+     * Menyembunyikan modal laporan kota.
+     */
+    function hideReport() {
+        reportModal.classList.remove('modal-show');
     }
     
     // Fungsi untuk memeriksa koneksi ke jalan
@@ -1166,7 +1305,7 @@
             keys[e.key.toLowerCase()] = false;
         });
 
-        // Event listener untuk kontrol sentuh pada tombol
+        // --- PERBAIKAN: Gunakan pointerdown dan pointerup pada setiap tombol secara individual ---
         const allMobileButtons = [
             landscapeControls.up, landscapeControls.down, landscapeControls.left, landscapeControls.right,
             portraitControls.up, portraitControls.down, portraitControls.left, portraitControls.right
@@ -1175,23 +1314,33 @@
         allMobileButtons.forEach(btn => {
             if (btn) {
                 btn.addEventListener('pointerdown', (e) => {
+                    e.preventDefault(); // Mencegah perilaku default seperti scrolling
+                    const buttonId = e.currentTarget.id;
+                    if (buttonId.includes('up')) touchControls.up = true;
+                    if (buttonId.includes('down')) touchControls.down = true;
+                    if (buttonId.includes('left')) touchControls.left = true;
+                    if (buttonId.includes('right')) touchControls.right = true;
+                });
+                btn.addEventListener('pointerup', (e) => {
                     e.preventDefault();
-                    if (e.target.id.includes('up')) touchControls.up = true;
-                    if (e.target.id.includes('down')) touchControls.down = true;
-                    if (e.target.id.includes('left')) touchControls.left = true;
-                    if (e.target.id.includes('right')) touchControls.right = true;
-                    document.body.addEventListener('pointerup', resetTouchControls);
+                    const buttonId = e.currentTarget.id;
+                    if (buttonId.includes('up')) touchControls.up = false;
+                    if (buttonId.includes('down')) touchControls.down = false;
+                    if (buttonId.includes('left')) touchControls.left = false;
+                    if (buttonId.includes('right')) touchControls.right = false;
+                });
+                // Untuk memastikan tombol berhenti jika sentuhan bergerak keluar dari area tombol
+                btn.addEventListener('pointerleave', (e) => {
+                     e.preventDefault();
+                     const buttonId = e.currentTarget.id;
+                     if (buttonId.includes('up')) touchControls.up = false;
+                     if (buttonId.includes('down')) touchControls.down = false;
+                     if (buttonId.includes('left')) touchControls.left = false;
+                     if (buttonId.includes('right')) touchControls.right = false;
                 });
             }
         });
-        
-        function resetTouchControls() {
-            touchControls.up = false;
-            touchControls.down = false;
-            touchControls.left = false;
-            touchControls.right = false;
-            document.body.removeEventListener('pointerup', resetTouchControls);
-        }
+        // --- AKHIR DARI PERBAIKAN UNTUK TOMBOL MOBILE ---
 
         canvas.addEventListener('click', (e) => {
             const rect = canvas.getBoundingClientRect();
@@ -1287,6 +1436,8 @@
 
         // Event listener untuk tombol UI
         buildMenuButton.addEventListener('click', togglePopupMenu);
+	reportButton.addEventListener('click', showReport);
+        reportModalCloseButton.addEventListener('click', hideReport);
         moveModeButton.addEventListener('click', () => {
             setMode('move', null);
         });
@@ -1309,6 +1460,10 @@
             if (event.target === infoModal) {
                 hideInfoModal();
             }
+            // Tambahan ke listener window.click yang sudah ada
+            if (event.target === reportModal) {
+                hideReport();
+	    }
             if (isPopupMenuOpen && !popupMenu.contains(event.target) && !buildMenuButton.contains(event.target)) {
                 togglePopupMenu();
             }
