@@ -190,6 +190,40 @@
             opacity: 1;
             visibility: visible;
         }
+
+	.modal {
+	    display: none; 
+	    position: fixed;
+	    z-index: 1000;
+	    left: 0;
+	    top: 0;
+	    width: 100%;
+	    height: 100%;
+	    background-color: rgba(0,0,0,0.4);
+
+	    /* buat layout vertikal: kotak modal + tulisan */
+	    display: flex;
+	    flex-direction: column;
+	    align-items: center;
+	    justify-content: center;
+	}
+
+	.modal-content {
+	    background-color: #fff;
+	    padding: 20px;
+	    border-radius: 10px;
+	    width: 80%;
+	    max-width: 600px;
+	}
+
+	.modal-footer-note {
+	    margin-top: 15px;   /* jarak dari kotak modal */
+	    font-size: 20px;
+	    color: #fafafa;
+	    text-align: center;
+	    font-style: bold;
+	}
+
     </style>
 </head>
 <body>
